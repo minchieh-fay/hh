@@ -46,6 +46,23 @@ src-tauri/
 
 业务模块应尽量内聚：组件、hooks、store、schema 和 API 适配器优先放在同一个 feature 目录中，只有真正跨模块复用时才上移到公共目录。
 
+## 前后端业务边界
+
+- Agent、会话持久化、Skill、工具调用、长时间运行任务和权限控制等核心业务统一由 Rust 实现。
+- Rust 业务层统一放在 `src-tauri/src/app/`，按业务能力划分模块，例如 `agent`、`session`、`skill` 和 `settings`。
+- `app` 层负责业务用例、状态转换、参数校验、任务生命周期和事件编排；前端只负责交互、展示和本地 UI 状态。
+- `src-tauri/src/store/` 只负责路径、文件系统、数据库和其他基础设施能力，不直接承载业务规则。
+- 前端通过 Tauri command 和事件调用 `app` 层，不直接调用通用文件读写、数据库或命令执行接口。
+- `store` 中的函数不得标记 `#[tauri::command]`；需要释放给前端的能力必须由 `app` 层封装后再注册。
+- `config` 等内部业务模块同样不得直接暴露 Tauri command；配置读写接口统一通过 `app::settings` 对外提供。
+- 不向前端暴露没有业务约束的通用接口，例如 `read_file(path)`、`write_file(path)`、
+  `delete_file(path)` 或 `execute_command(command)`；应提供经过校验的业务接口，例如
+  `get_sessions()`、`save_session()`、`start_agent_task()` 和 `cancel_agent_task()`。
+- 前端可以进行即时校验和乐观展示，但 Rust `app` 层必须执行最终校验、权限判断和安全约束。
+- Agent 的文本输出、思考状态、工具调用、工具结果、错误和最终答复应由 Rust 产生结构化事件，
+  前端只负责订阅、渲染和维护适合界面的临时状态。
+- 业务规则只保留一份；涉及持久化、权限、外部系统、敏感数据或跨平台能力的规则不得只写在前端。
+
 ## Agent 工作台交互规范
 
 - 对话区是核心内容，桌面端可采用“会话列表 + 主对话 + 详情/工具面板”的三栏结构；移动端默认只显示一个主面板，通过抽屉或底部 Sheet 打开其他面板。
