@@ -1,9 +1,7 @@
-use serde::{Deserialize, Serialize};
-use tauri::AppHandle;
-
 use super::help::{help_check_response, help_validate_image_input};
+use serde::{Deserialize, Serialize};
 
-mod config;
+pub(crate) mod config;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ImageGenerationRequest {
@@ -28,11 +26,10 @@ pub struct ImageData {
 
 /// 调用 Agnes 图片生成接口，兼容文生图和 base64 参考图生图。
 pub async fn generate_image(
-    app: &AppHandle,
+    current_config: &config::Config,
     request: ImageGenerationRequest,
 ) -> Result<ImageGenerationResponse, String> {
-    // step.1 加载图片模块配置并校验提示词、尺寸和参考图片
-    let current_config = config::load(app).await?;
+    // step.1 使用图片模块配置并校验提示词、尺寸和参考图片
     if request.prompt.trim().is_empty() {
         return Err("图片提示词不能为空".to_string());
     }
@@ -59,6 +56,7 @@ pub async fn generate_image(
     // step.2 使用图片模块配置并按 Agnes 协议组装请求
     let api_key = current_config
         .api_key
+        .clone()
         .ok_or_else(|| "尚未配置 Agnes API key".to_string())?;
     let body = serde_json::json!({
         "model": current_config.model,

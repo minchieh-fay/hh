@@ -1,30 +1,28 @@
-use serde::{Deserialize, Serialize};
-use tauri::AppHandle;
-
 use super::help::{help_check_response, help_validate_image_input};
+use serde::{Deserialize, Serialize};
 
-mod config;
+pub(crate) mod config;
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(untagged)]
 pub enum MessageContent {
     Text(String),
     Parts(Vec<ContentPart>),
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ContentPart {
     Text { text: String },
     ImageUrl { image_url: ImageUrl },
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ImageUrl {
     pub url: String,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ChatMessage {
     pub role: String,
     pub content: MessageContent,
@@ -65,11 +63,10 @@ pub struct ChatResponseMessage {
 
 /// 调用 Agnes Chat Completions，并支持文本和 base64 图片消息。
 pub async fn chat_completion(
-    app: &AppHandle,
+    current_config: &config::Config,
     request: ChatCompletionRequest,
 ) -> Result<ChatCompletionResponse, String> {
-    // step.1 加载聊天模块配置并校验消息和图片输入
-    let current_config = config::load(app).await?;
+    // step.1 使用聊天模块配置并校验消息和图片输入
     if request.messages.is_empty() {
         return Err("至少需要一条消息".to_string());
     }
@@ -91,6 +88,7 @@ pub async fn chat_completion(
     // step.2 使用聊天模块配置组装兼容请求
     let api_key = current_config
         .api_key
+        .clone()
         .ok_or_else(|| "尚未配置 Agnes API key".to_string())?;
     let body = serde_json::json!({
         "model": current_config.model,

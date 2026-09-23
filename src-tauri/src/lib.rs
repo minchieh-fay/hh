@@ -1,3 +1,4 @@
+mod agent;
 mod app;
 mod config;
 mod llm;
@@ -18,11 +19,9 @@ pub fn run() {
             app::settings::get_config,
             app::settings::save_config,
             app::storage::get_storage_info,
-            app::llm::chat_completion,
-            app::llm::generate_image,
-            app::llm::create_video,
-            app::llm::get_video,
-            app::llm::get_embedding_info
+            app::chat_agent::start_chat_task,
+            app::chat_agent::cancel_chat_task,
+            app::video_agent::get_video_task
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

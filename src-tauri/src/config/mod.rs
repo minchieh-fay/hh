@@ -1,6 +1,7 @@
 mod help;
 
 use serde::{Deserialize, Serialize};
+use std::sync::{OnceLock, RwLock};
 use tauri::AppHandle;
 
 use self::help::{help_parse_config, help_resolve_config, help_serialize_config};
@@ -11,7 +12,7 @@ pub struct ConfigFile {
     pub api_key: Option<String>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct EffectiveConfig {
     pub api_key: Option<String>,
     pub base_url: String,
@@ -20,12 +21,39 @@ pub struct EffectiveConfig {
     pub video_model: String,
 }
 
+static RUNTIME_CONFIG: OnceLock<RwLock<Option<EffectiveConfig>>> = OnceLock::new();
+
+/// 将应用层读取到的配置写入进程内缓存，供业务模块按需适配。
+pub(crate) fn set_runtime_config(config: EffectiveConfig) -> Result<(), String> {
+    let cache = RUNTIME_CONFIG.get_or_init(|| RwLock::new(None));
+    let mut current = cache
+        .write()
+        .map_err(|_| "获取配置缓存写锁失败".to_string())?;
+    *current = Some(config);
+    Ok(())
+}
+
+/// 获取业务模块使用的进程内配置快照。
+pub(crate) fn get_runtime_config() -> Result<EffectiveConfig, String> {
+    let cache = RUNTIME_CONFIG
+        .get()
+        .ok_or_else(|| "应用配置尚未初始化".to_string())?;
+    let current = cache
+        .read()
+        .map_err(|_| "获取配置缓存读锁失败".to_string())?;
+    current
+        .clone()
+        .ok_or_else(|| "应用配置尚未初始化".to_string())
+}
+
 /// 读取配置文件并返回当前生效的 LLM 配置。
 pub(crate) async fn get_config(app: &AppHandle) -> Result<EffectiveConfig, String> {
     // step.1 定位并读取用户配置文件
     let config = help_parse_config(store::read_config_file(app)?)?;
     // step.2 按用户配置生成基础配置并动态更新模型
-    help_fetch_latest_models(help_resolve_config(config)).await
+    let config = help_fetch_latest_models(help_resolve_config(config)).await?;
+    set_runtime_config(config.clone())?;
+    Ok(config)
 }
 
 /// 写入 LLM 配置文件并返回当前生效的配置。
@@ -37,7 +65,9 @@ pub(crate) async fn save_config(
     let content = help_serialize_config(&config)?;
     store::write_config_file(app, &content)?;
     // step.2 返回保存后动态获取的最新模型
-    help_fetch_latest_models(help_resolve_config(config)).await
+    let config = help_fetch_latest_models(help_resolve_config(config)).await?;
+    set_runtime_config(config.clone())?;
+    Ok(config)
 }
 
 /// 使用 API key 拉取并选择三类版本号最大的 flash 模型。

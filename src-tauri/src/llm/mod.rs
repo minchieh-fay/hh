@@ -1,10 +1,12 @@
-mod chat;
+pub(crate) mod chat;
+#[allow(dead_code)]
 mod embd;
 mod help;
+#[allow(dead_code)]
 mod image;
-mod video;
+pub(crate) mod video;
 
-pub use chat::{chat_completion, ChatCompletionRequest, ChatCompletionResponse};
-pub use embd::{embedding_info, EmbeddingInfo};
-pub use image::{generate_image, ImageGenerationRequest, ImageGenerationResponse};
+pub use chat::{
+    chat_completion, ChatCompletionRequest, ChatCompletionResponse, ChatMessage,
+};
 pub use video::{create_video, get_video, VideoGenerationRequest, VideoResponse};

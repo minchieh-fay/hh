@@ -1,9 +1,7 @@
-use serde::{Deserialize, Serialize};
-use tauri::AppHandle;
-
 use super::help::{help_check_response, help_validate_image_input};
+use serde::{Deserialize, Serialize};
 
-mod config;
+pub(crate) mod config;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct VideoGenerationRequest {
@@ -25,11 +23,10 @@ pub struct VideoResponse {
 
 /// 创建 Agnes Video reference 模式任务，仅接受图片 base64 或公开 URL。
 pub async fn create_video(
-    app: &AppHandle,
+    current_config: &config::Config,
     request: VideoGenerationRequest,
 ) -> Result<VideoResponse, String> {
-    // step.1 加载视频模块配置并校验 reference 模式的提示词、时长和图片数量
-    let current_config = config::load(app).await?;
+    // step.1 使用视频模块配置并校验 reference 模式的提示词、时长和图片数量
     if request.prompt.trim().is_empty() {
         return Err("视频提示词不能为空".to_string());
     }
@@ -48,6 +45,7 @@ pub async fn create_video(
     // step.2 使用视频模块配置并固定使用 reference 协议
     let api_key = current_config
         .api_key
+        .clone()
         .ok_or_else(|| "尚未配置 Agnes API key".to_string())?;
     let body = serde_json::json!({
         "model": current_config.model,
@@ -82,14 +80,17 @@ pub async fn create_video(
 }
 
 /// 查询 Agnes Video reference 模式任务状态和最终视频地址。
-pub async fn get_video(app: &AppHandle, video_id: String) -> Result<VideoResponse, String> {
-    // step.1 校验任务标识并加载视频模块配置
+pub async fn get_video(
+    current_config: &config::Config,
+    video_id: String,
+) -> Result<VideoResponse, String> {
+    // step.1 校验任务标识并使用视频模块配置
     if video_id.trim().is_empty() {
         return Err("视频任务标识不能为空".to_string());
     }
-    let current_config = config::load(app).await?;
     let api_key = current_config
         .api_key
+        .clone()
         .ok_or_else(|| "尚未配置 Agnes API key".to_string())?;
     // step.2 按 reference 模式要求查询异步任务
     let url = format!(
